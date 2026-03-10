@@ -50,89 +50,9 @@ class PacmanAgent(BasePacmanAgent):
     # - self.visited = set()  # Track visited positions
     # - self.name = "Your Agent Name"
        self.name = "Template Pacman"
-    
-    def BFS(self,map_state, start, goal):
-        rows, cols = map_state.shape
-        queue = deque()
-        queue.append((start, []))
-        visited = set()
-        directions = [
-            (-1, 0, Move.UP),
-            (1, 0, Move.DOWN),
-            (0, -1, Move.LEFT),
-            (0, 1, Move.RIGHT)
-            ]
-        while queue:
-            pos, path = queue.popleft()
-            if pos == goal:
-                return path
-            visited.add(pos)
-            r, c = pos
-            for dr, dc, move in directions:
-                nr = r +dr
-                nc = c +dc
-                if 0 <= nr < rows and 0 <= nc < cols:
-                    if map_state[nr][nc] == 0:
-                        visited.add((nr, nc))
-                        queue.append(((nr, nc), path + [move]))
-        return[]
-
-    def DFS(self, map_state, start, goal):
-        rows, cols = map_state.shape
-        stack = []
-        stack.append((start, []))
-        visited = set()
-        directions = [
-            (-1, 0, Move.UP),
-            (1, 0, Move.DOWN),
-            (0, -1, Move.LEFT),
-            (0, 1, Move.RIGHT)
-            ]
-        while stack:
-            pos, path = stack.pop()
-            if pos == goal:
-                return path
-            if pos in visited:
-                continue
-            visited.add(pos)
-            r, c = pos
-            for dr, dc, move in directions:
-                nr = r + dr
-                nc = c + dc
-                if 0 <= nr < rows and 0 <= nc < cols:
-                    if map_state[nr][nc] == 0:
-                        stack.append(((nr, nc), path + [move]))
-        return[]
 
     def Heuristic(self, a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
-    def Greedy(self, map_state, start, goal):
-        rows, cols = map_state.shape
-        pq = []
-        heapq.heappush(pq, (0, start, []))
-        visited = set()
-        directions = [
-            (-1, 0, Move.UP),
-            (1, 0, Move.DOWN),
-            (0, -1, Move.LEFT),
-            (0, 1, Move.RIGHT)]
-        while pq:
-            h, pos, path = heapq.heappop(pq)
-            if pos == goal:
-                return path
-            if pos in visited:
-                continue
-            visited.add(pos)
-            r, c = pos
-            for dr, dc, move in directions:
-                nr = r + dr
-                nc = c + dc
-                if 0 <= nr < rows and 0 <= nc < cols:
-                    if map_state[nr][nc] == 0:
-                        if(nr, nc) not in visited:
-                            h = self.Heuristic((nr, nc), goal)
-                            heapq.heappush(pq, (h, (nr, nc), path + [move]))
-        return[]
 
     def A_Star(self, map_state, start, goal):
         rows, cols = map_state.shape
