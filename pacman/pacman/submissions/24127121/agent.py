@@ -180,6 +180,8 @@ class PacmanAgent(BasePacmanAgent):
         return map_state[row, col] == 0
 
 
+
+
 class GhostAgent(BaseGhostAgent):
     """
     Ghost (Hider) Agent - Goal: Avoid being caught
@@ -200,7 +202,7 @@ class GhostAgent(BaseGhostAgent):
         for move in [Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]:
             dr, dc = move.value
             next_pos = (enemy_pos[0] + dr, enemy_pos[1] + dc)
-            if not self.is_valid_position(next_pos, map_state):
+            if not self._is_valid_position(next_pos, map_state):
                 continue
             distance = self.Heuristic(next_pos, my_pos)
             if distance > best_distance:
@@ -222,8 +224,8 @@ class GhostAgent(BaseGhostAgent):
                 continue
             total_score = 0
             for _ in range(simulations):
-                score += self.simulate(map_state, start, pacman_pos)
-            avg_score = score / simulations
+                total_score += self.simulate(map_state, start, pacman_pos)
+            avg_score = total_score / simulations
             if avg_score > best_score:
                 best_score = avg_score
                 best_move = move
@@ -277,7 +279,7 @@ class GhostAgent(BaseGhostAgent):
         g = ghost_pos
         p = pacman_pos
         for _ in range(steps):
-            moves = [Move.UP, Move.DOWN, Move.LEFt, Move.RIGHT]
+            moves = [Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]
             random.shuffle(moves)
             for m in moves:
                 dr, dc = m.value
