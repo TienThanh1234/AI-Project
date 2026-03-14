@@ -119,31 +119,6 @@ class PacmanAgent(BasePacmanAgent):
             if self._is_valid_move(my_position, m, map_state):
                 return (m, 1)
         return (Move.STAY, 1)
-        
-        # Try to move towards ghost
-        if abs(row_diff) > abs(col_diff):
-            primary_move = Move.DOWN if row_diff > 0 else Move.UP
-            desired_steps = abs(row_diff)
-        else:
-            primary_move = Move.RIGHT if col_diff > 0 else Move.LEFT
-            desired_steps = abs(col_diff)
-
-        action = self._choose_action(
-            my_position,
-            [primary_move],
-            map_state,
-            desired_steps
-        )
-        if action:
-            return action
-
-        # If the primary direction is blocked, try other moves
-        fallback_moves = [Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]
-        action = self._choose_action(my_position, fallback_moves, map_state, self.pacman_speed)
-        if action:
-            return action
-
-        return (Move.STAY, 1)
     
     # Helper methods (you can add more)
     def Heuristic(self, a, b):
@@ -226,60 +201,113 @@ class GhostAgent(BaseGhostAgent):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.name = "Ghost 24127474"
-    
-    def step(self, map_state: np.ndarray, 
-             my_position: tuple, 
-             enemy_position: tuple,
-             step_number: int) -> Move:
-        
-        # Thu thập các bước đi hợp lệ không đụng tường
-        valid_moves = []
-        for move in [Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]:
-            if self._is_valid_move(my_position, move, map_state):
-                valid_moves.append(move)
-                
-        if not valid_moves:
-            return Move.STAY
+        self.name = "Ghost 24127121"
 
-        best_move = valid_moves[0]
-        max_dist = -1
-        
-        for move in valid_moves:
-            delta_row, delta_col = move.value
-            next_pos = (my_position[0] + delta_row, my_position[1] + delta_col)
-            
-            # Tính khoảng cách từ vị trí tiếp theo tới Pacman
-            path_to_enemy = self.bfs(next_pos, enemy_position, map_state)
-            dist = len(path_to_enemy) if path_to_enemy else float('inf')
-            
-            # Ưu tiên bước đi làm khoảng cách (dist) lớn nhất
-            if dist > max_dist:
-                max_dist = dist
+    def Monte_Carlo_move(self, map_state, ghost_pos, pacman_pos, simulations=30):
+        best_move = Move.STAY
+        best_score = -999
+
+        for move in [Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]:
+            dr, dc = move.value
+            start = (ghost_pos[0] + dr, ghost_pos[1] + dc)
+            if not self._is_valid_position(start, map_state):
+                continue
+
+            total_score = 0
+            for _ in range(simulations):
+                total_score += self.simulate(map_state, start, pacman_pos)
+            avg_score = total_score / simulations
+            if avg_score > best_score:
+                best_score = avg_score
                 best_move = move
-                
         return best_move
     
-    def bfs(self, start, goal, map_state):
-        queue = deque([(start, [])])
-        visited = {start}
-        
-        while queue:
-            current_pos, path = queue.popleft()
-            if current_pos == goal:
-                return path
-                
-            for move in [Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]:
-                if self._is_valid_move(current_pos, move, map_state):
-                    delta_row, delta_col = move.value
-                    next_pos = (current_pos[0] + delta_row, current_pos[1] + delta_col)
-                    
-                    if next_pos not in visited:
-                        visited.add(next_pos)
-                        queue.append((next_pos, path + [move]))
-        return []
+    def step(self, map_state: np.ndarray,
+         my_position: tuple,
+         enemy_position: tuple,
+         step_number: int) -> Move:
+        """
+        Decide the next move.
+        Args:
+            map_state: 2D numpy array where 1 = wall, 0 = empty
+            my_position: Ghost current position (row, col)
+            enemy_position: Pacman current position (row, col)
+            step_number: Current step number
+        Returns:
+            Move: One of Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT, Move.STAY
+        """
+    # Predict Pacman's next position
+        predicted_enemy_pos = self.predict_enemy_move(
+            enemy_position,
+            my_position,
+            map_state
+        )
+    # Use Monte Carlo to choose best move
+        move = self.Monte_Carlo_move(
+            map_state,
+            my_position,
+            predicted_enemy_pos
+        )
+        if move and self._is_valid_move(my_position, move, map_state):
+            return move
+    # Fallback: choose any valid move
+        for m in [Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]:
+            if self._is_valid_move(my_position, m, map_state):
+                return m
+        return Move.STAY
+
+    
+    
 
     # Helper methods từ template gốc
+    def simulate(self, map_state, ghost_pos, pacman_pos, steps=30):
+        g = ghost_pos
+        p = pacman_pos
+        for _ in range(steps):
+            # Ghost random move
+            moves = [Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]
+            random.shuffle(moves)
+            for m in moves:
+                dr, dc = m.value
+                next_pos = (g[0] + dr, g[1] + dc)
+                if self._is_valid_position(next_pos, map_state):
+                    g = next_pos
+                    break
+            # Pacman chase ghost
+            best_distance = 999
+            best_pos = p
+            for m in moves:
+                dr, dc = m.value
+                next_pos = (p[0] + dr, p[1] + dc)
+                if not self._is_valid_position(next_pos, map_state):
+                    continue
+                d = self.Heuristic(next_pos, g)
+                if d < best_distance:
+                    best_distance = d
+                    best_pos = next_pos
+            p = best_pos
+        return self.Heuristic(g, p)
+
+    def Heuristic(self, a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    def predict_enemy_move(self, enemy_pos, my_pos, map_state):
+        best_move = Move.STAY
+        best_distance = -1
+        for move in [Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]:
+            dr, dc = move.value
+            next_pos = (enemy_pos[0] + dr, enemy_pos[1] + dc)
+            if not self._is_valid_position(next_pos, map_state):
+                continue
+            distance = self.Heuristic(next_pos, my_pos)
+            if distance > best_distance:
+                best_distance = distance
+                best_move = move
+        predicted_pos = (
+            enemy_pos[0] + best_move.value[0],
+            enemy_pos[1] + best_move.value[1]
+        )
+        return predicted_pos
     def _is_valid_move(self, pos: tuple, move: Move, map_state: np.ndarray) -> bool:
         delta_row, delta_col = move.value
         new_pos = (pos[0] + delta_row, pos[1] + delta_col)
