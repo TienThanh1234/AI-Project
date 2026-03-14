@@ -51,8 +51,12 @@ class PacmanAgent(BasePacmanAgent):
     # - self.name = "Your Agent Name"
        self.name = "Template Pacman"
 
-    def Heuristic(self, a, b):
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+    def predict_ghost(self, ghost_pos, pacman_pos):
+        dr = ghost_pos[0] - pacman_pos[0]
+        dc = ghost_pos[1] - pacman_pos[1]
+        return (
+            ghost_pos[0] + (1 if dr > 0 else -1 if dr < 0 else 0),
+            ghost_pos[1]+ (1 if dc > 0 else -1 if dc < 0 else 0))
 
     def A_Star(self, map_state, start, goal):
         rows, cols = map_state.shape
@@ -131,6 +135,15 @@ class PacmanAgent(BasePacmanAgent):
         return (Move.STAY, 1)
     
     # Helper methods (you can add more)
+    def Heuristic(self, a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    def predict_ghost(self, ghost_pos, pacman_pos):
+        dr = ghost_pos[0] - pacman_pos[0]
+        dc = ghost_pos[1] - pacman_pos[1]
+        return (
+            ghost_pos[0] + (1 if dr > 0 else -1 if dr < 0 else 0),
+            ghost_pos[1]+ (1 if dc > 0 else -1 if dc < 0 else 0))
     
     def _choose_action(self, pos: tuple, moves, map_state: np.ndarray, desired_steps: int):
         for move in moves:
@@ -180,28 +193,37 @@ class GhostAgent(BaseGhostAgent):
         # TODO: Initialize any data structures you need
         pass
 
-    def Heuristic(self, a, b):
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])
-    def Monte_Carlo_move(self, map_state, ghost_pos, pacman_pos, simulations=20):
-        best_move = None
-        best_score = -1
+    def predict_enemy_move(self, enemy_pos, my_pos, map_state):
+        """Predict Pacman's next move (assume they move away from Ghost)."""
+        best_move = Move.STAY
+        best_distance = -1
+        for move in [Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]:
+            dr, dc = move.value
+            next_pos = (enemy_pos[0] + dr, enemy_pos[1] + dc)
+            if not self.is_valid_position(next_pos, map_state):
+                continue
+            distance = self.Heuristic(next_pos, my_pos)
+            if distance > best_distance:
+                best_distance = distance
+                best_move = move
+        return (enemy_pos[0] + best_move.value[0],
+                enemy_pos[1] + best_move.value[1])
+
+
+
+
+    def Monte_Carlo_move(self, map_state, ghost_pos, pacman_pos, simulations=30):
+        best_move = Move.STAY
+        best_score = -999
         for move in[Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]:
             dr, dc = move.value
-            start = (ghost_pos[0] + dr, ghost_pos[1] +dc)
+            start = (ghost_pos[0] + dr, ghost_pos[1] + dc)
             if not self._is_valid_position(start, map_state):
                 continue
             total_score = 0
             for _ in range(simulations):
-                pos = start
-                for _ in range(5):
-                    moves = [Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]
-                    m = random.choice(moves)
-                    dr, dc = m.value
-                    next_pos = (pos[0] + dr, pos[1] + dc)
-                    if self._is_valid_position(next_pos, map_state):
-                        pos = next_pos
-                total_score += self.Heuristic(pos, pacman_pos)
-            avg_score = total_score / simulations
+                score += self.simulate(map_state, start, pacman_pos)
+            avg_score = score / simulations
             if avg_score > best_score:
                 best_score = avg_score
                 best_move = move
@@ -224,7 +246,8 @@ class GhostAgent(BaseGhostAgent):
             Move: One of Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT, Move.STAY
         """
         # TODO: Implement your search algorithm here
-        move = self.Monte_Carlo_move(map_state, my_position, enemy_position)
+        predicted_enemy_pos = self.predict_enemy_move(enemy_position, my_position, map_state)
+        move = self.Monte_Carlo_move(map_state, my_position, predicted_enemy_pos)
         if move and self._is_valid_move(my_position, move, map_state):
             return move
         for m in [Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]:
@@ -250,6 +273,35 @@ class GhostAgent(BaseGhostAgent):
         return Move.STAY
     
     # Helper methods (you can add more)
+    def simulate(self, map_state, ghost_pos, pacman_pos, steps = 8):
+        g = ghost_pos
+        p = pacman_pos
+        for _ in range(steps):
+            moves = [Move.UP, Move.DOWN, Move.LEFt, Move.RIGHT]
+            random.shuffle(moves)
+            for m in moves:
+                dr, dc = m.value
+                next_pos = (g[0] + dr, g[1] + dc)
+                if self._is_valid_position(next_pos, map_state):
+                    g = next_pos
+                    break
+            # PacMan chase ghost
+            best_distance = 999
+            best_pos = p
+            for m in moves:
+                dr, dc = m.value
+                next_pos = (p[0] + dr, p[1] + dc)
+                if not self._is_valid_position(next_pos, map_state):
+                    continue
+                d = self.Heuristic(next_pos, g)
+                if d < best_distance:
+                    best_distance = d
+                    best_pos = next_pos
+            p = best_pos
+        return self.Heuristic(g, p)
+
+    def Heuristic(self, a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
     
     def _is_valid_move(self, pos: tuple, move: Move, map_state: np.ndarray) -> bool:
         """Check if a move from pos is valid."""
